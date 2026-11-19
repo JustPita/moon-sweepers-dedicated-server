@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <stdbool.h>
+#include <ctype.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -51,6 +52,7 @@ static bool ports_valid=true;
 static bool configured,installed,server_started,backend_ready,world_ready,client_connected,client_join_started;
 static bool ticket_ready,ticket_failed;
 static uint64_t server_id,self_id;
+static char steam_token[65];static bool steam_token_valid=true;
 static uint32_t client_ticket;
 static uint8_t ticket_bytes[MAX_TICKET];static uint32_t ticket_size;
 static ULONGLONG next_auth,next_ping,next_roster,ticket_requested_at;
@@ -97,7 +99,7 @@ static struct {
  void (__cdecl *set_product)(void *,const char *);void (__cdecl *set_description)(void *,const char *);
  void (__cdecl *set_mod)(void *,const char *);void (__cdecl *set_name)(void *,const char *);
  void (__cdecl *set_dedicated)(void *,bool);void (__cdecl *set_advertise)(void *,bool);
- void (__cdecl *set_capacity)(void *,int);void (__cdecl *logon)(void *);
+ void (__cdecl *set_capacity)(void *,int);void (__cdecl *logon)(void *);void (__cdecl *logon_token)(void *,const char *);
  bool (__cdecl *logged_on)(void *);uint64_t (__cdecl *gs_id)(void *);
  int (__cdecl *begin_auth)(void *,const void *,int,uint64_t);void (__cdecl *end_auth)(void *,uint64_t);
  int (__cdecl *has_license)(void *,uint64_t,uint32_t);
@@ -168,6 +170,9 @@ static void configure(void){
  env("MOON_CONNECT",value,sizeof(value));if(*value){server_id=parse_id(value);mode=MODE_CLIENT;}
  env("MOON_GAME_PORT",value,sizeof(value));if(*value&&!parse_port(value,&game_port))ports_valid=false;
  env("MOON_QUERY_PORT",value,sizeof(value));if(*value&&!parse_port(value,&query_port))ports_valid=false;
+ /* Optional Game Server Login Token: a persistent server SteamID instead of a
+    new anonymous one at every start. Never logged. */
+ env("MOON_STEAM_TOKEN",value,sizeof(value));if(*value){size_t n=strlen(value);steam_token_valid=n<sizeof(steam_token);for(size_t i=0;i<n&&steam_token_valid;i++)if(!isalnum((unsigned char)value[i]))steam_token_valid=false;if(steam_token_valid)memcpy(steam_token,value,n+1);SecureZeroMemory(value,sizeof(value));}
  env("MOON_SERVER_NAME",value,sizeof(value));if(*value)snprintf(server_name,sizeof(server_name),"%.63s",value);
  value[0]=0;SetLastError(ERROR_SUCCESS);DWORD configured_ids=GetEnvironmentVariableA("MOON_ALLOWED_STEAM_IDS",value,sizeof(value));
  allowlist_set=configured_ids>0||GetLastError()!=ERROR_ENVVAR_NOT_FOUND;
@@ -356,6 +361,7 @@ static void handle_server_callback(CallbackMessage *message){
  transport_callback(message);
  if(message->id==101){phase("server-steam-connected");}
  else if(message->id==102||message->id==103){
+  if(message->id==102&&*steam_token&&message->data&&message->size>=4){char text[160];snprintf(text,sizeof(text),"Steam refused the server logon (EResult %d): check MOON_STEAM_TOKEN (Game Server Login Token for app 5335510)",*(int32_t *)message->data);report(text);}
   backend_ready=false;world_ready=false;
   next_backend_ready=GetTickCount64()+1000;
   for(unsigned i=0;i<MAX_PEERS;i++)if(peers[i].id)drop_peer(&peers[i],"Steam server disconnected; reconnect required");
@@ -387,8 +393,8 @@ static bool start_server(void){
  if(!sdk.gs_init(0,0,(uint16_t)game_port,(uint16_t)query_port,2,"1.0.5")){phase("server-init-failed");return false;}
  server_api=sdk.gs();messages_api=sdk.gs_messages();if(!server_api||!messages_api){sdk.shutdown();server_api=messages_api=NULL;phase("server-interface-failed");return false;}
  sdk.set_product(server_api,"5335510");sdk.set_description(server_api,"Moon Sweepers");sdk.set_mod(server_api,"Moon Sweepers");sdk.set_name(server_api,server_name);sdk.set_dedicated(server_api,true);sdk.set_advertise(server_api,false);sdk.set_capacity(server_api,16);
- sdk.dispatch_init();server_pipe=sdk.gs_pipe();sdk.logon(server_api);sockets_api=sdk.gs_sockets();utils_api=sdk.utils();if(utils_api)sdk.init_relay(utils_api);
- server_started=true;phase("server-logging-on-anonymously");return true;
+ sdk.dispatch_init();server_pipe=sdk.gs_pipe();if(*steam_token)sdk.logon_token(server_api,steam_token);else sdk.logon(server_api);sockets_api=sdk.gs_sockets();utils_api=sdk.utils();if(utils_api)sdk.init_relay(utils_api);
+ server_started=true;phase(*steam_token?"server-logging-on-with-token":"server-logging-on-anonymously");return true;
 }
 static void __cdecl server_start_steam(Object *self,const Method *info){(void)self;(void)info;start_server();}
 static uint64_t __cdecl server_steam_id(const Method *info){(void)info;return server_id;}
@@ -470,7 +476,7 @@ static bool load_apis(void){
  if(!steam_module)return false;
 #define SDK(member,name) do{FARPROC p=GetProcAddress(steam_module,name);memcpy(&sdk.member,&p,sizeof(p));if(!sdk.member){report("Missing " name);return false;}}while(0)
  SDK(gs_init,"SteamInternal_GameServer_Init");SDK(gs,"SteamAPI_SteamGameServer_v015");SDK(gs_messages,"SteamAPI_SteamGameServerNetworkingMessages_SteamAPI_v002");SDK(client_messages,"SteamAPI_SteamNetworkingMessages_SteamAPI_v002");SDK(gs_sockets,"SteamAPI_SteamGameServerNetworkingSockets_SteamAPI_v012");SDK(client_sockets,"SteamAPI_SteamNetworkingSockets_SteamAPI_v012");SDK(utils,"SteamAPI_SteamNetworkingUtils_SteamAPI_v004");SDK(user,"SteamAPI_SteamUser_v023");
- SDK(set_product,"SteamAPI_ISteamGameServer_SetProduct");SDK(set_description,"SteamAPI_ISteamGameServer_SetGameDescription");SDK(set_mod,"SteamAPI_ISteamGameServer_SetModDir");SDK(set_name,"SteamAPI_ISteamGameServer_SetServerName");SDK(set_dedicated,"SteamAPI_ISteamGameServer_SetDedicatedServer");SDK(set_advertise,"SteamAPI_ISteamGameServer_SetAdvertiseServerActive");SDK(set_capacity,"SteamAPI_ISteamGameServer_SetMaxPlayerCount");SDK(logon,"SteamAPI_ISteamGameServer_LogOnAnonymous");SDK(logged_on,"SteamAPI_ISteamGameServer_BLoggedOn");SDK(gs_id,"SteamAPI_ISteamGameServer_GetSteamID");SDK(begin_auth,"SteamAPI_ISteamGameServer_BeginAuthSession");SDK(end_auth,"SteamAPI_ISteamGameServer_EndAuthSession");SDK(has_license,"SteamAPI_ISteamGameServer_UserHasLicenseForApp");SDK(init_auth,"SteamAPI_ISteamNetworkingSockets_InitAuthentication");SDK(shutdown,"SteamGameServer_Shutdown");
+ SDK(set_product,"SteamAPI_ISteamGameServer_SetProduct");SDK(set_description,"SteamAPI_ISteamGameServer_SetGameDescription");SDK(set_mod,"SteamAPI_ISteamGameServer_SetModDir");SDK(set_name,"SteamAPI_ISteamGameServer_SetServerName");SDK(set_dedicated,"SteamAPI_ISteamGameServer_SetDedicatedServer");SDK(set_advertise,"SteamAPI_ISteamGameServer_SetAdvertiseServerActive");SDK(set_capacity,"SteamAPI_ISteamGameServer_SetMaxPlayerCount");SDK(logon,"SteamAPI_ISteamGameServer_LogOnAnonymous");SDK(logon_token,"SteamAPI_ISteamGameServer_LogOn");SDK(logged_on,"SteamAPI_ISteamGameServer_BLoggedOn");SDK(gs_id,"SteamAPI_ISteamGameServer_GetSteamID");SDK(begin_auth,"SteamAPI_ISteamGameServer_BeginAuthSession");SDK(end_auth,"SteamAPI_ISteamGameServer_EndAuthSession");SDK(has_license,"SteamAPI_ISteamGameServer_UserHasLicenseForApp");SDK(init_auth,"SteamAPI_ISteamNetworkingSockets_InitAuthentication");SDK(shutdown,"SteamGameServer_Shutdown");
  SDK(dispatch_init,"SteamAPI_ManualDispatch_Init");SDK(gs_pipe,"SteamGameServer_GetHSteamPipe");SDK(run_frame,"SteamAPI_ManualDispatch_RunFrame");SDK(next_callback,"SteamAPI_ManualDispatch_GetNextCallback");SDK(free_callback,"SteamAPI_ManualDispatch_FreeLastCallback");
  SDK(auth_status,"SteamAPI_ISteamNetworkingSockets_GetAuthenticationStatus");SDK(init_relay,"SteamAPI_ISteamNetworkingUtils_InitRelayNetworkAccess");SDK(relay_status,"SteamAPI_ISteamNetworkingUtils_GetRelayNetworkStatus");
  SDK(send,"SteamAPI_ISteamNetworkingMessages_SendMessageToUser");SDK(receive,"SteamAPI_ISteamNetworkingMessages_ReceiveMessagesOnChannel");SDK(accept,"SteamAPI_ISteamNetworkingMessages_AcceptSessionWithUser");SDK(close,"SteamAPI_ISteamNetworkingMessages_CloseSessionWithUser");SDK(close_channel,"SteamAPI_ISteamNetworkingMessages_CloseChannelWithUser");SDK(session_info,"SteamAPI_ISteamNetworkingMessages_GetSessionConnectionInfo");SDK(release,"SteamAPI_SteamNetworkingMessage_t_Release");SDK(user_id,"SteamAPI_ISteamUser_GetSteamID");SDK(auth_ticket,"SteamAPI_ISteamUser_GetAuthSessionTicket");SDK(cancel_ticket,"SteamAPI_ISteamUser_CancelAuthTicket");
@@ -507,7 +513,7 @@ static bool resolve_marshalling(void){
 }
 bool MoonNet_Install(const void *image,void (*log_line)(const char *)){
  configure();logger=log_line;if(mode==MODE_OFF)return true;
- {char dump_flag[8];env("MOON_DUMP_METHODS",dump_flag,sizeof(dump_flag));if(strcmp(dump_flag,"1")==0&&load_apis()){game_image=image;const char *names[]={"MoonSteamLobby","MoonCrewAccess","MoonCrewSession","MoonCrewBans"};for(unsigned i=0;i<4;i++)dump_class_methods(klass(names[i]),names[i]);}}if(installed)return true;game_image=image;
+ {char dump_flag[8];env("MOON_DUMP_METHODS",dump_flag,sizeof(dump_flag));if(strcmp(dump_flag,"1")==0&&load_apis()){game_image=image;char extra[512];env("MOON_DUMP_CLASSES",extra,sizeof(extra));if(*extra){char *save=NULL;for(char *name=strtok_s(extra,",",&save);name;name=strtok_s(NULL,",",&save))dump_class_methods(klass(name),name);}else{const char *names[]={"MoonSteamLobby","MoonCrewAccess","MoonCrewSession","MoonCrewBans"};for(unsigned i=0;i<4;i++)dump_class_methods(klass(names[i]),names[i]);}}}if(installed)return true;game_image=image;
  if(mode==MODE_SERVER&&!ports_valid){report("MOON_GAME_PORT and MOON_QUERY_PORT must be distinct numbers from 1024 to 65535");phase("server-port-invalid");return false;}
  if(mode==MODE_SERVER&&!server_password_valid){report("MOON_SERVER_PASSWORD is required: use 8..128 printable ASCII characters");phase("server-password-invalid");return false;}
  if(!load_apis()||!resolve_game()||(mode==MODE_SERVER&&!resolve_marshalling())){phase("network-install-failed");return false;}
@@ -533,6 +539,7 @@ bool MoonNet_Install(const void *image,void (*log_line)(const char *)){
  }
 #undef HOOK
  if(!ok){phase("network-hook-failed");return false;}installed=true;
+ if(mode==MODE_SERVER&&!steam_token_valid)report("Invalid MOON_STEAM_TOKEN ignored: the server logs on anonymously");
  if(mode==MODE_SERVER&&allowlist_set&&!allowlist_valid)report("Invalid MOON_ALLOWED_STEAM_IDS: all player authentication is blocked");
  phase(mode==MODE_SERVER?"server-waiting-start":"client-waiting-steam");return true;
 }

@@ -49,6 +49,16 @@
             "field_type": "text"
         },
         {
+            "name": "Steam server token",
+            "description": "Optional Game Server Login Token for app 5335510 (create it at https://steamcommunity.com/dev/managegameservers). With a token the server keeps the same Steam ID after restarts; empty uses a new anonymous Steam ID at every start.",
+            "env_variable": "MOON_STEAM_TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:64|regex:/^[A-Za-z0-9]*$/",
+            "field_type": "text"
+        },
+        {
             "name": "Save slot",
             "description": "Game save slot (1-5) hosted by the server.",
             "env_variable": "MOON_SLOT",

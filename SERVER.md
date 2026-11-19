@@ -170,7 +170,10 @@ Each player launches the game through their own licensed Steam account with:
 -moon-connect SERVER_STEAMID64
 ~~~
 
-Replace SERVER_STEAMID64 with the anonymous server ID from status. Keep the
+Replace SERVER_STEAMID64 with the anonymous server ID from status. This ID changes
+at every start unless `MOON_STEAM_TOKEN` holds a Game Server Login Token for app
+5335510 (created at https://steamcommunity.com/dev/managegameservers): the server
+then logs on with it and keeps the same Steam ID. Keep the
 normal game graphics enabled on each playing client, and enter the server password
 when the module prompts. If you configured the optional allowlist, each player's
 individual SteamID must also be listed. Recreate the container after changing

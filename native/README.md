@@ -56,7 +56,12 @@ for the current multiplayer verification status.
 
 After a game update, `MOON_DUMP_METHODS=1` logs the managed signatures of
 MoonSteamLobby, MoonCrewAccess, MoonCrewSession and MoonCrewBans to the host log,
-which helps to find new peer checks or changed methods.
+which helps to find new peer checks or changed methods. `MOON_DUMP_CLASSES` replaces
+that list with comma-separated class names from the `MoonCleaners` namespace.
+
+`MOON_STEAM_TOKEN` (optional) logs the server on with a Game Server Login Token for
+app 5335510 instead of anonymously, so the server Steam ID stays the same across
+restarts. Player clients accept both anonymous and persistent server IDs.
 
 1.0.6 added two peer filters, `MoonSteamLobby.CanExchangeWith` and
 `MoonCrewSession.FromMember`, that drop game messages from anyone who is not a

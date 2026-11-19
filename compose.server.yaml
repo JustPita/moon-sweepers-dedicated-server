@@ -17,6 +17,7 @@ services:
       MOON_QUERY_PORT: "${MOON_QUERY_PORT:-27026}"
       MOON_SERVER_PASSWORD: "${MOON_SERVER_PASSWORD:?Set a server password in .server.env}"
       MOON_ALLOWED_STEAM_IDS: "${MOON_ALLOWED_STEAM_IDS:-}"
+      MOON_STEAM_TOKEN: "${MOON_STEAM_TOKEN:-}"
       MOON_BACKUP_KEEP: "${MOON_BACKUP_KEEP:-10}"
     volumes:
       - server-data:/data

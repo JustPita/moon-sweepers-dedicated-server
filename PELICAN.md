@@ -48,8 +48,21 @@ Differences from the Compose image:
    give it to the players with the password. Each player installs the client
    module as described in [README.md](README.md#connect-each-windows-player).
 
-The Steam ID can change after a restart; the players then update it with
+Without a token, the server logs on anonymously and gets a new Steam ID at every
+start; the players then update it with
 `install-client.ps1 -Action Shortcut -ServerId NEW_ID`.
+
+## Keep the same Steam ID
+
+1. Sign in at <https://steamcommunity.com/dev/managegameservers> with a Steam
+   account that meets Valve's requirements, and create a Game Server Login
+   Token for **App ID 5335510**.
+2. Paste it in **Startup > Steam server token** (`MOON_STEAM_TOKEN`) and restart.
+   The console shows `server-logging-on-with-token`, and the server keeps the
+   same Steam ID from then on.
+
+Use one token per server and keep it private. If Steam refuses it, the console
+reports the EResult code; regenerate the token on the same page.
 
 ## Files in the server volume
 
