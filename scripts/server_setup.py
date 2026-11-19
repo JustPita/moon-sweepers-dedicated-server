@@ -10,7 +10,12 @@ import shlex
 import struct
 import tempfile
 
-SUPPORTED_SHA256 = "14f711a6a3b1b7cd803a03f85cc6c6201c5b546ab9b90329533f5cb8ae2e7f13"
+# GameAssembly.dll SHA-256 -> (game version, Steam build). Keep in sync with
+# container/server/server-import and scripts/*-client.ps1.
+SUPPORTED_BUILDS = {
+    "14f711a6a3b1b7cd803a03f85cc6c6201c5b546ab9b90329533f5cb8ae2e7f13": ("1.0.5", "26317497"),
+    "106b28aa7deef1054639a5f48c2c3ae9623a309e0e49631d8b5dfa29a6d5b88f": ("1.0.6", "26682829"),
+}
 
 
 def steam_id(value):
@@ -78,8 +83,9 @@ def main():
             header = stream.read(8)
     except OSError:
         parser.error("The selected installation is missing IL2CPP metadata.")
-    if digest != SUPPORTED_SHA256 or len(header) != 8 or struct.unpack("<II", header) != (0xFAB11BAF, 108):
-        parser.error("This release supports Moon Sweepers 1.0.5 / Steam build 26317497 only. Update the server module for other game builds.")
+    if digest not in SUPPORTED_BUILDS or len(header) != 8 or struct.unpack("<II", header) != (0xFAB11BAF, 108):
+        supported = ", ".join(f"{version} / Steam build {build}" for version, build in SUPPORTED_BUILDS.values())
+        parser.error("This release supports Moon Sweepers " + supported + " only. Update the server module for other game builds.")
     try:
         password = server_password(args.password if args.password is not None else generate_password())
         players = allowlist(args.steam_ids)

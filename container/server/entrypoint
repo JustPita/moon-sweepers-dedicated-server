@@ -6,6 +6,7 @@ if (($#)); then moon_mode="$1"; fi
 moon_game_pid=""
 moon_x_pid=""
 moon_log_pid=""
+moon_stdin_pid=""
 moon_game_started=0
 moon_stop_requested=0
 moon_forced_stop=0
@@ -194,6 +195,7 @@ moon_cleanup() {
     if [[ "$moon_mode" == run ]]; then
         moon_backup_saved_world || echo "Automatic backup failed; existing save files and older backups were retained." >&2
     fi
+    if [[ -n "$moon_stdin_pid" ]]; then kill -TERM "$moon_stdin_pid" 2>/dev/null || true; fi
     if [[ -n "$moon_log_pid" ]]; then
         sleep 0.2
         kill -TERM "$moon_log_pid" 2>/dev/null || true
@@ -260,6 +262,7 @@ if [[ "$moon_mode" == probe ]]; then
     /usr/lib/wine/wine64 /opt/moon/bin/steam-probe.exe \
         'Z:\data\game\MoonSweepers_Data\Plugins\x86_64\steam_api64.dll' \
         'Z:\data\game' &
+    moon_game_pid=$!
 else
     [[ -f /opt/moon/mod/version.dll ]] || { echo "Native server module is not built in this image." >&2; exit 1; }
     [[ "$MOON_SLOT" =~ ^[1-5]$ ]] || { echo "MOON_SLOT must be 1-5." >&2; exit 1; }
@@ -274,7 +277,26 @@ else
     /usr/lib/wine/wine64 MoonSweepers.exe \
         -moon-host -moon-headless -moon-slot "$MOON_SLOT" -batchmode -nographics \
         -logFile 'Z:\data\logs\unity-player.log' &
+    moon_game_pid=$!
     moon_game_started=1
+    if [[ "${MOON_STDIN_COMMANDS:-0}" == 1 ]]; then
+        # Panel consoles (Pelican/Pterodactyl) deliver typed commands on stdin.
+        # Background jobs get /dev/null as stdin unless it is redirected explicitly.
+        exec 3<&0
+        (
+            trap - EXIT TERM INT
+            while IFS= read -r moon_line; do
+                moon_line="${moon_line//$'\r'/}"
+                case "$moon_line" in
+                    save|stop) moon_command "$moon_line" && echo "Requested native $moon_line." ;;
+                    status) /opt/moon/bin/entrypoint status || true ;;
+                    "") ;;
+                    *) echo "Console commands: save, stop, status" ;;
+                esac
+            done
+        ) <&3 &
+        moon_stdin_pid=$!
+        exec 3<&-
+    fi
 fi
-moon_game_pid=$!
 wait "$moon_game_pid"

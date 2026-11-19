@@ -8,7 +8,12 @@ import shutil
 import struct
 import tempfile
 
-SUPPORTED_SHA256 = "14f711a6a3b1b7cd803a03f85cc6c6201c5b546ab9b90329533f5cb8ae2e7f13"
+# GameAssembly.dll SHA-256 -> (game version, Steam build). Keep in sync with
+# scripts/server_setup.py and scripts/*-client.ps1.
+SUPPORTED_BUILDS = {
+    "14f711a6a3b1b7cd803a03f85cc6c6201c5b546ab9b90329533f5cb8ae2e7f13": ("1.0.5", "26317497"),
+    "106b28aa7deef1054639a5f48c2c3ae9623a309e0e49631d8b5dfa29a6d5b88f": ("1.0.6", "26682829"),
+}
 FILES = ("MoonSweepers.exe", "GameAssembly.dll", "UnityPlayer.dll", "baselib.dll", "dstorage.dll", "dstoragecore.dll", "UnityCrashHandler64.exe")
 DIRECTORIES = ("MoonSweepers_Data", "D3D12")
 
@@ -34,11 +39,11 @@ def validate_game(root):
     with metadata.open("rb") as stream:
         header = stream.read(8)
     digest = hashlib.sha256((root / "GameAssembly.dll").read_bytes()).hexdigest()
-    if len(header) != 8 or struct.unpack("<II", header) != (0xFAB11BAF, 108) or digest != SUPPORTED_SHA256:
+    if len(header) != 8 or struct.unpack("<II", header) != (0xFAB11BAF, 108) or digest not in SUPPORTED_BUILDS:
+        supported = ", ".join(f"{version} / build {build}" for version, build in SUPPORTED_BUILDS.values())
         raise SystemExit(
-            "Unsupported Moon Sweepers build. This server module supports 1.0.5 / Steam build 26317497 "
-            "with metadata 108 and GameAssembly SHA-256 " + SUPPORTED_SHA256 + ". "
-            "Your GameAssembly SHA-256 is " + digest + ". "
+            "Unsupported Moon Sweepers build. This server module supports " + supported + " "
+            "(IL2CPP metadata 108). Your GameAssembly SHA-256 is " + digest + ". "
             "Use a server-module release that supports your installed game version. Existing saves were not changed."
         )
     return digest
@@ -48,8 +53,8 @@ def main():
     source = Path("/import/game")
     target = Path("/data/game")
     if (target / "MoonSweepers.exe").is_file():
-        validate_game(target)
-        print("Existing owned game installation matches supported 1.0.5 / build 26317497.")
+        version, build = SUPPORTED_BUILDS[validate_game(target)]
+        print(f"Existing owned game installation matches supported {version} / build {build}.")
         return
     digest = validate_game(source)
     files = [source / name for name in FILES]
@@ -76,7 +81,8 @@ def main():
         validate_game(stage)
         os.rename(stage, target)
         stage = None
-        result = {"version": "1.0.5", "steam_buildid": "26317497", "files": len(files), "bytes": total,
+        version, build = SUPPORTED_BUILDS[digest]
+        result = {"version": version, "steam_buildid": build, "files": len(files), "bytes": total,
                   "metadata_version": 108, "GameAssembly_sha256": digest}
         Path("/data/import-manifest.json").write_text(json.dumps(result, indent=2) + "\n")
         print(f"Imported supported owned game: {len(files)} files, {total:,} bytes.")

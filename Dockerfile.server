@@ -49,3 +49,18 @@ COPY --from=native-build /out/version.dll /opt/moon/mod/version.dll
 COPY --from=native-build /out/MinHook-LICENSE.txt /opt/moon/mod/MinHook-LICENSE.txt
 LABEL org.opencontainers.image.title="Moon Sweepers anonymous server prototype" \
       org.opencontainers.image.description="Wine/Unity CPU-only server runtime using the genuine Steam GameServer API"
+
+# Pelican / Pterodactyl image: Wings mounts the server volume at /home/container
+# and runs the container as its own unprivileged UID, so /data points there.
+FROM server AS pelican
+USER root
+RUN rm -rf /data && ln -s /home/container /data
+COPY --chmod=755 container/pelican/entrypoint /opt/moon/bin/pelican-entrypoint
+ENV HOME=/home/container USER=container WINEPREFIX=/home/container/wineprefix
+USER moon
+WORKDIR /home/container
+ENTRYPOINT ["/usr/bin/tini", "--", "/opt/moon/bin/pelican-entrypoint"]
+CMD []
+HEALTHCHECK NONE
+LABEL org.opencontainers.image.title="Moon Sweepers server for Pelican" \
+      org.opencontainers.image.description="Pelican/Pterodactyl image of the Wine/Unity CPU-only Moon Sweepers server"

@@ -5,10 +5,14 @@ and the genuine Steam GameServer API. It uses an anonymous server identity, so i
 does not need a third playing account or Steam login. The server runs with
 -batchmode/-nographics; players use their normal licensed Steam clients.
 
-Supported game: **Moon Sweepers 1.0.5 / Steam build 26317497**, IL2CPP metadata 108.
-The importer checks GameAssembly SHA-256
-14f711a6a3b1b7cd803a03f85cc6c6201c5b546ab9b90329533f5cb8ae2e7f13
-on both first import and every later start. Other builds fail with instructions to
+Supported game builds (IL2CPP metadata 108), identified by GameAssembly SHA-256:
+
+| Version | Steam build | GameAssembly.dll SHA-256 |
+|---|---|---|
+| 1.0.6 | 26682829 | 106b28aa7deef1054639a5f48c2c3ae9623a309e0e49631d8b5dfa29a6d5b88f |
+| 1.0.5 | 26317497 | 14f711a6a3b1b7cd803a03f85cc6c6201c5b546ab9b90329533f5cb8ae2e7f13 |
+
+The importer checks this hash on both first import and every later start. Other builds fail with instructions to
 use a compatible module release. Saves are kept separately from the game copy.
 
 The Ubuntu/Wine backend has passed anonymous login, networking certificate,

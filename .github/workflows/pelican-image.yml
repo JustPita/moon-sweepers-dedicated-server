@@ -1,0 +1,41 @@
+name: Pelican image
+
+# Publishes the Pelican/Pterodactyl image referenced by pelican/egg-moon-sweepers.json.
+# The image contains Wine, the adapter module and the scripts only: no game files.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=pelican,enable={{is_default_branch}}
+            type=ref,event=tag,prefix=pelican-
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.server
+          target: pelican
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

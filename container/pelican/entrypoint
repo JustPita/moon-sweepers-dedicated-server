@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Pelican / Pterodactyl entrypoint. Wings mounts the server volume at
+# /home/container (/data is a symlink to it), passes egg variables as
+# environment, and sends console commands on stdin.
+set -euo pipefail
+cd /home/container
+
+if [[ "${MOON_SERVER_PASSWORD:-}" == "CHANGE_ME_PLEASE" ]]; then
+    echo "Set MOON_SERVER_PASSWORD in the Startup tab before starting the server." >&2
+    exit 1
+fi
+
+if [[ ! -f /home/container/game/MoonSweepers.exe ]]; then
+    cat >&2 <<'EOF'
+The game files are missing.
+Upload your own Moon Sweepers installation (the folder that contains
+MoonSweepers.exe, GameAssembly.dll and MoonSweepers_Data) into the game/
+directory of this server over SFTP, then start the server again.
+Steam usually installs it in steamapps/common/Moon Sweepers.
+EOF
+    exit 1
+fi
+
+# Joining uses the anonymous server Steam ID over Steam P2P/relay, so these
+# ports never need to be reachable. The allocation is reused for the Steam
+# GameServer API; the query port only has to differ inside the container.
+if [[ "${SERVER_PORT:-}" =~ ^[0-9]+$ ]] && (( SERVER_PORT >= 1024 && SERVER_PORT <= 65535 )); then
+    export MOON_GAME_PORT="$SERVER_PORT"
+    if (( SERVER_PORT < 65535 )); then MOON_QUERY_PORT=$((SERVER_PORT + 1)); else MOON_QUERY_PORT=$((SERVER_PORT - 1)); fi
+    export MOON_QUERY_PORT
+fi
+export MOON_STDIN_COMMANDS=1
+
+exec /opt/moon/bin/entrypoint run

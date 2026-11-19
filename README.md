@@ -5,7 +5,8 @@ uses a genuine anonymous Steam GameServer identity, and keeps the world in a
 persistent volume. You and your friend use your two existing licensed Steam
 accounts. A third playing account and a Steam desktop on the server are unnecessary.
 
-**Supported game:** Moon Sweepers 1.0.5, Steam build 26317497. All playing PCs need
+**Supported game:** Moon Sweepers 1.0.6 (Steam build 26682829) and 1.0.5 (Steam build
+26317497). The server and every player must run the same build. All playing PCs need
 this release's small client module. The installers check the game build and refuse
 to overwrite a different mod's `version.dll`.
 
@@ -51,6 +52,12 @@ Run `docker compose --env-file .server.env -f compose.server.yaml up -d` after
 changing it so Compose recreates the container with the new environment. This is
 the game's shared join password;
 it is separate from every player's Steam password.
+
+## Pelican / Pterodactyl
+
+A panel image and egg are also provided: import `pelican/egg-moon-sweepers.json`,
+upload your game files into the server's `game/` directory, and set the password in
+Startup. See the [Pelican guide](PELICAN.md).
 
 ## Ports and joining
 

@@ -12,8 +12,9 @@ try {
     if (-not (Test-Path -LiteralPath $recordPath -PathType Leaf)) { throw 'Install the Moon Sweepers client module first.' }
     $record=Get-Content -LiteralPath $recordPath -Raw -Encoding UTF8 | ConvertFrom-Json
     if (-not (Test-Path -LiteralPath $proxy -PathType Leaf) -or (Get-FileHash -LiteralPath $proxy -Algorithm SHA256).Hash -ne $record.sha256) { throw 'The installed client module changed. Update it using the client installer.' }
-    $supported='14f711a6a3b1b7cd803a03f85cc6c6201c5b546ab9b90329533f5cb8ae2e7f13'
-    if ((Get-FileHash -LiteralPath (Join-Path $gameDirectory 'GameAssembly.dll') -Algorithm SHA256).Hash -ne $supported) { throw 'This module supports Moon Sweepers 1.0.5, Steam build 26317497. The installed game differs.' }
+    # GameAssembly.dll SHA-256 of supported builds; keep in sync with container/server/server-import.
+    $supported=@{'14F711A6A3B1B7CD803A03F85CC6C6201C5B546AB9B90329533F5CB8AE2E7F13'='1.0.5 (Steam build 26317497)';'106B28AA7DEEF1054639A5F48C2C3AE9623A309E0E49631D8B5DFA29A6D5B88F'='1.0.6 (Steam build 26682829)'}
+    if (-not $supported.ContainsKey((Get-FileHash -LiteralPath (Join-Path $gameDirectory 'GameAssembly.dll') -Algorithm SHA256).Hash)) { throw ('This module supports Moon Sweepers '+(($supported.Values | Sort-Object) -join ', ')+'. The installed game differs.') }
     $serverId=[string]$record.server_id
     if ($serverId -notmatch '^\d{17}$' -or (([UInt64]::Parse($serverId) -shr 52) -band 15) -ne 4) { throw 'Set the current server SteamID with the client installer before joining.' }
     if (Get-CimInstance Win32_Process -Filter "Name='MoonSweepers.exe'" | Where-Object { $_.ExecutablePath -eq $gameExe }) { throw 'Moon Sweepers is already running. Close it before joining again.' }

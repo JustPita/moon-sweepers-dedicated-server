@@ -87,8 +87,9 @@ if ($Action -eq 'Uninstall') {
     Write-Output 'Client module removed. Your game saves and Steam settings were preserved.'
     exit
 }
-$supported='14f711a6a3b1b7cd803a03f85cc6c6201c5b546ab9b90329533f5cb8ae2e7f13'
-if ((Get-FileHash -LiteralPath (Join-Path $gameDirectory 'GameAssembly.dll') -Algorithm SHA256).Hash -ne $supported) { throw 'This module supports Moon Sweepers 1.0.5, Steam build 26317497. The installed game differs.' }
+# GameAssembly.dll SHA-256 of supported builds; keep in sync with container/server/server-import.
+$supported=@{'14F711A6A3B1B7CD803A03F85CC6C6201C5B546AB9B90329533F5CB8AE2E7F13'='1.0.5 (Steam build 26317497)';'106B28AA7DEEF1054639A5F48C2C3AE9623A309E0E49631D8B5DFA29A6D5B88F'='1.0.6 (Steam build 26682829)'}
+if (-not $supported.ContainsKey((Get-FileHash -LiteralPath (Join-Path $gameDirectory 'GameAssembly.dll') -Algorithm SHA256).Hash)) { throw ('This module supports Moon Sweepers '+(($supported.Values | Sort-Object) -join ', ')+'. The installed game differs.') }
 if ($Action -eq 'Install') {
     if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) { throw 'The release is missing native/out/version.dll. Build it with native/Dockerfile.build.' }
     $artifactHash=(Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash

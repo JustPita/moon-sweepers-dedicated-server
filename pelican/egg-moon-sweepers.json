@@ -1,0 +1,72 @@
+{
+    "_comment": "Unofficial Moon Sweepers server egg for Pelican and Pterodactyl. See PELICAN.md.",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-11-19T00:00:00+00:00",
+    "name": "Moon Sweepers (unofficial)",
+    "author": "49323721+JustPita@users.noreply.github.com",
+    "description": "Unofficial CPU-only Moon Sweepers host: runs your owned Windows game with Wine and the anonymous Steam GameServer API. Players join with the server Steam ID and password through Steam P2P/relay; no port forwarding and no Steam login are needed. Upload your own game files into game/ before the first start.",
+    "features": null,
+    "docker_images": {
+        "Moon Sweepers (Wine, CPU only)": "ghcr.io/hexonmd/moon-sweepers-dedicated-server:pelican"
+    },
+    "file_denylist": [],
+    "startup": "/opt/moon/bin/pelican-entrypoint",
+    "config": {
+        "files": "{}",
+        "startup": "{\r\n    \"done\": \"world-bound\"\r\n}",
+        "logs": "{}",
+        "stop": "stop"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# Moon Sweepers is a paid game without a dedicated server depot, so the\n# owner uploads their own installation. Nothing is downloaded here.\nset -e\nmkdir -p /mnt/server/game\ncat > /mnt/server/UPLOAD-GAME-FILES.txt <<'EOF'\nUpload your own Moon Sweepers installation into the game/ directory.\n\nCopy the CONTENTS of steamapps/common/Moon Sweepers (MoonSweepers.exe,\nGameAssembly.dll, UnityPlayer.dll, MoonSweepers_Data, D3D12, ...) so that\ngame/MoonSweepers.exe exists, for example with an SFTP client.\n\nThe server checks the game build at every start. The game version must\nbe supported by the server module and match the version of the players.\nEOF\necho \"Installation complete. Upload the game files into game/ before starting.\"\n",
+            "container": "ghcr.io/pelican-eggs/installers:debian",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Server password",
+            "description": "Shared join password asked by the game when a player connects (8-128 printable ASCII characters). The server refuses to start with the default value.",
+            "env_variable": "MOON_SERVER_PASSWORD",
+            "default_value": "CHANGE_ME_PLEASE",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|min:8|max:128|regex:/^[\\x20-\\x7E]+$/",
+            "field_type": "text"
+        },
+        {
+            "name": "Allowed SteamIDs",
+            "description": "Optional comma-separated list of up to 15 SteamID64s. Empty allows every licensed player who knows the password.",
+            "env_variable": "MOON_ALLOWED_STEAM_IDS",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:300|regex:/^[0-9,]*$/",
+            "field_type": "text"
+        },
+        {
+            "name": "Save slot",
+            "description": "Game save slot (1-5) hosted by the server.",
+            "env_variable": "MOON_SLOT",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer|between:1,5",
+            "field_type": "text"
+        },
+        {
+            "name": "Backups kept",
+            "description": "Number of automatic world backups (backups/) kept after each clean stop.",
+            "env_variable": "MOON_BACKUP_KEEP",
+            "default_value": "10",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|integer|between:1,100",
+            "field_type": "text"
+        }
+    ]
+}

@@ -8,7 +8,7 @@ root = Path(__file__).resolve().parent.parent
 files = [
     'README.md', 'SERVER.md', 'THIRD_PARTY_NOTICES.md', 'LICENSES/MinHook-LICENSE.txt',
     'Dockerfile.server', '.dockerignore', '.gitattributes', '.gitignore',
-    'compose.server.yaml', '.server.env.example',
+    'compose.server.yaml', '.server.env.example', 'PELICAN.md', 'pelican/egg-moon-sweepers.json',
     'scripts/server_setup.py', 'scripts/install-client.ps1', 'scripts/launch-client.ps1', 'scripts/package.py',
     'native/README.md', 'native/Dockerfile.build', 'native/out/version.dll',
     'native/out/MinHook-LICENSE.txt',
@@ -17,6 +17,7 @@ files += [str(p.relative_to(root)).replace('\\', '/') for p in sorted((root/'nat
           if p.is_file() and p.suffix in ('.c', '.h', '.S', '.def')]
 files += ['container/server/'+name for name in (
     'entrypoint', 'server-import', 'steam-redist', 'health.py', 'redist-lock.json', 'steam-probe.c')]
+files += ['container/pelican/entrypoint']
 files = sorted(set(files))
 for name in files:
     if not (root/name).is_file():

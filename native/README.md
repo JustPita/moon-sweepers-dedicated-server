@@ -5,7 +5,8 @@ adapts the owned game to an anonymous Steam GameServer host or direct-connect
 client. It contains our adapter code and MinHook, without game binaries, accounts,
 or copied game source. Runtime methods and fields are resolved through IL2CPP.
 
-Supported game: Moon Sweepers 1.0.5, Steam build 26317497, Unity 6000.6.0f1.
+Supported game: Moon Sweepers 1.0.6 (Steam build 26682829) and 1.0.5 (Steam build
+26317497), Unity 6000.6.0f1.
 The import and client installation tools reject a different GameAssembly hash.
 Both players still need their own Steam accounts and game licenses. The server
 uses Valve's anonymous GameServer login and consumes no playing account.
