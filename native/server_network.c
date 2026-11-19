@@ -435,6 +435,27 @@ static void *managed_code(const Method *m){
  if(!address||VirtualQuery(address,&v,sizeof(v))!=sizeof(v)||v.State!=MEM_COMMIT||(v.Protect&PAGE_GUARD)||!(v.Protect&(PAGE_EXECUTE|PAGE_EXECUTE_READ|PAGE_EXECUTE_READWRITE|PAGE_EXECUTE_WRITECOPY)))return NULL;
  return address;
 }
+/* Diagnostic for game updates: MOON_DUMP_METHODS=1 logs the managed method
+   signatures of the classes this adapter depends on. */
+static void dump_class_methods(void *k,const char *label){
+ typedef const Method *(__cdecl *GetMethods)(void *,void **);typedef const char *(__cdecl *GetName)(const Method *);
+ typedef uint32_t (__cdecl *ParamCount)(const Method *);typedef const void *(__cdecl *GetParam)(const Method *,uint32_t);typedef const void *(__cdecl *GetReturn)(const Method *);
+ typedef uint32_t (__cdecl *Flags)(const Method *,uint32_t *);typedef char *(__cdecl *TypeName)(const void *);typedef void (__cdecl *Free)(void *);
+ GetMethods methods_of;GetName name_of;ParamCount count_of;GetParam param_of;GetReturn return_of;Flags flags_of;TypeName type_name;Free release;FARPROC p;
+#define DUMP_API(var,name) do{p=GetProcAddress(game_module,name);memcpy(&var,&p,sizeof(p));if(!p)return;}while(0);
+ DUMP_API(methods_of,"il2cpp_class_get_methods")DUMP_API(name_of,"il2cpp_method_get_name")DUMP_API(count_of,"il2cpp_method_get_param_count")DUMP_API(param_of,"il2cpp_method_get_param")DUMP_API(return_of,"il2cpp_method_get_return_type")DUMP_API(flags_of,"il2cpp_method_get_flags")DUMP_API(type_name,"il2cpp_type_get_name")DUMP_API(release,"il2cpp_free")
+#undef DUMP_API
+ if(!k){char text[128];snprintf(text,sizeof(text),"dump: class %s unavailable",label);report(text);return;}
+ void *it=NULL;const Method *m;
+ while((m=methods_of(k,&it))!=NULL){
+  char text[1024];uint32_t impl=0,flags=flags_of(m,&impl),count=count_of(m);
+  char *ret=type_name(return_of(m));int n=snprintf(text,sizeof(text),"dump: %s.%s%s(",label,(flags&0x10)?"static ":"",name_of(m));
+  for(uint32_t i=0;i<count&&n>0&&n<(int)sizeof(text)-80;i++){char *t=type_name(param_of(m,i));n+=snprintf(text+n,sizeof(text)-n,"%s%s",i?", ":"",t?t:"?");if(t)release(t);}
+  if(n>0&&n<(int)sizeof(text)-80)snprintf(text+n,sizeof(text)-n,") -> %s",ret?ret:"?");
+  if(ret)release(ret);
+  report(text);
+ }
+}
 static bool hook_method(void *k,const char *name,int argc,void *replacement,void **original){
  const Method *m=method(k,name,argc);void *address=managed_code(m);if(!address){report(name);return false;}
  MH_STATUS result=MH_CreateHook(address,replacement,original);if(result!=MH_OK)return false;return MH_EnableHook(address)==MH_OK;
@@ -485,7 +506,8 @@ static bool resolve_marshalling(void){
  return true;
 }
 bool MoonNet_Install(const void *image,void (*log_line)(const char *)){
- configure();logger=log_line;if(mode==MODE_OFF)return true;if(installed)return true;game_image=image;
+ configure();logger=log_line;if(mode==MODE_OFF)return true;
+ {char dump_flag[8];env("MOON_DUMP_METHODS",dump_flag,sizeof(dump_flag));if(strcmp(dump_flag,"1")==0&&load_apis()){game_image=image;const char *names[]={"MoonSteamLobby","MoonCrewAccess","MoonCrewSession","MoonCrewBans"};for(unsigned i=0;i<4;i++)dump_class_methods(klass(names[i]),names[i]);}}if(installed)return true;game_image=image;
  if(mode==MODE_SERVER&&!ports_valid){report("MOON_GAME_PORT and MOON_QUERY_PORT must be distinct numbers from 1024 to 65535");phase("server-port-invalid");return false;}
  if(mode==MODE_SERVER&&!server_password_valid){report("MOON_SERVER_PASSWORD is required: use 8..128 printable ASCII characters");phase("server-password-invalid");return false;}
  if(!load_apis()||!resolve_game()||(mode==MODE_SERVER&&!resolve_marshalling())){phase("network-install-failed");return false;}
@@ -493,6 +515,10 @@ bool MoonNet_Install(const void *image,void (*log_line)(const char *)){
 #define HOOK(k,name,n,fn) do{if(!hook_method(k,name,n,fn,NULL)){report("Network hook failed: " name);ok=false;}}while(0)
  HOOK(game.lobby_class,"get_InLobby",0,lobby_present);HOOK(game.lobby_class,"get_IsHost",0,lobby_host);HOOK(game.lobby_class,"get_LobbyId",0,lobby_id);HOOK(game.lobby_class,"get_HostId",0,lobby_id);HOOK(game.lobby_class,"get_ShiftStarted",0,lobby_present);
  HOOK(game.lobby_class,"IsMember",1,lobby_member);HOOK(game.lobby_class,"InSteamLobby",1,lobby_member);HOOK(game.lobby_class,"RefreshMembers",0,refresh_members);HOOK(game.lobby_class,"RefreshMembersNow",0,refresh_members);HOOK(game.lobby_class,"RefreshLobby",0,refresh_members);
+ /* 1.0.6 added peer filters on top of lobby membership; older builds lack them. */
+#define OPTIONAL_HOOK(k,name,n,fn) do{if(method(k,name,n)){if(!hook_method(k,name,n,fn,NULL)){report("Network hook failed: " name);ok=false;}}}while(0)
+ OPTIONAL_HOOK(game.lobby_class,"CanExchangeWith",1,lobby_member);OPTIONAL_HOOK(game.crew_class,"FromMember",1,lobby_member);
+#undef OPTIONAL_HOOK
  HOOK(game.lobby_class,"UpdatePresence",0,noop_static);HOOK(game.lobby_class,"ShareLook",0,noop_static);HOOK(game.lobby_class,"InviteFriends",0,noop_static);HOOK(game.lobby_class,"PublishRemovals",0,noop_static);HOOK(game.lobby_class,"Create",2,noop_create);HOOK(game.lobby_class,"SetPrivacy",1,noop_privacy);HOOK(game.lobby_class,"SetReady",1,noop_ready);HOOK(game.lobby_class,"StartShift",0,start_shift);HOOK(game.lobby_class,"Leave",0,leave_direct);
  if(!hook_method(game.crew_class,"SendBytes",5,send_bytes,(void **)&real_send_bytes)||!hook_method(game.crew_class,"ReceiveTransfer",2,receive_transfer,(void **)&real_receive_transfer)||!hook_method(game.crew_class,"ReceiveWorld",2,receive_world,(void **)&real_receive_world))ok=false;
  if(mode==MODE_SERVER){

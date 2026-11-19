@@ -54,6 +54,15 @@ stopped. A health check verifies both ready state and a recent heartbeat; it doe
 not establish that a remote player has joined. See the root installation guide
 for the current multiplayer verification status.
 
+After a game update, `MOON_DUMP_METHODS=1` logs the managed signatures of
+MoonSteamLobby, MoonCrewAccess, MoonCrewSession and MoonCrewBans to the host log,
+which helps to find new peer checks or changed methods.
+
+1.0.6 added two peer filters, `MoonSteamLobby.CanExchangeWith` and
+`MoonCrewSession.FromMember`, that drop game messages from anyone who is not a
+Steam lobby member. Both are answered from the adapter's authenticated roster,
+like `IsMember`; they are hooked only when present.
+
 With no opt-in, or in processes other than MoonSweepers.exe, the DLL only forwards
 VERSION exports. Removing an owned installation disables the module. This is an
 unofficial experimental adapter and must be revalidated after a game update.
